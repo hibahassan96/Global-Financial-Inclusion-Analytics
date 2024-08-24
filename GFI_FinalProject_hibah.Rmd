@@ -1,0 +1,374 @@
+---
+title: "Global Findex Database - Understanding Financial Services and Inclusion"
+author: "Hiba Hassan-hibah "
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include = FALSE}
+library(tidyr)
+library(MASS)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(corrplot)
+```
+
+
+## Introduction-Global Findex Database
+
+This project aims at identifying some key trends in the financial services industry and their subsequent acceptance/adoption by communities across the globe. 
+
+This rich dataset:
+- identifies the kind of financial services available (banking, mobile wallets, digital payments)
+- adoption and resistance to these financial services across different regions, globally for the year 2021
+
+Through the course of analysis, we identify these trends and subsequently give policy recommendations on how such services may be improved to encourage both quality enhancement and financial inclusivity. 
+
+About the dataset:
+1) The dataset utilized is World Bank - Global Financial Inclusion (Global Findex) Database 2021: https://microdata.worldbank.org/index.php/catalog/4607/get-microdata
+2) The data was cleaned and irrelevant columns were dropped, some missing values were replaced by the mode of that country/factor - this is the data set that was utilized finally (can be found attached as an excel and csv format file)
+
+## Importing data
+
+
+```{r}
+GFI <- read.csv("C:/CMU/Post-CMU/Fall 2022/94842-Programming with R/Project/GFI/Global Financial Index Data2 - hibah.csv", stringsAsFactors=TRUE)
+```
+
+
+
+## Initial Data Analysis
+
+
+```{r}
+summary(GFI)
+nrow(GFI)
+ncol(GFI)
+dim(GFI)
+```
+
+
+## Overall Data Story Analysis
+
+Now we do smaller analysis regarding things like internet access, mobile phone access, bank account usage to better understand the kind of data set we are dealing with and see what kind of financial services are picking pace/have potential for improvement in specific regions and eventually country-wise analysis.
+
+```{r}
+#understanding demographics
+summary(GFI$age, GFI$Gender, GFI$educ)
+
+hist(GFI$age,
+         main = "Overall Demographics-Age",
+         xlab = "Age",
+         col = "light blue")
+
+hist(as.numeric(GFI$Gender),
+         main = "Overall Demographics-Gender",
+         xlab = "Gender",
+         col = "light blue")
+
+hist(log(GFI$pop_adult),
+         main = "Overall Demographics-Population",
+         xlab = "Gender",
+         col = "light blue")
+```
+
+A major chunk of the individuals are males(coded as 2), young adults aged between 18 to 40.
+
+
+```{r}
+#understanding internet access across different regions
+table(GFI$Region, GFI$internetaccess)
+```
+We observe that majority of the regions do have access to internet - as most responses come out to be 1 ie 'Yes'. Regions like Europe,OECD and Latin America have higher internet access compared to regions like South Asia and Africa. 
+
+As an initial analysis based on this, we can assume that ease of internet access may help encourage use of digital financial services. 
+
+```{r}
+#understanding mobile phone access across different regions
+table(GFI$Region, GFI$mobileowner)
+
+#mobile phone access overall
+hist(GFI$Bank.Account.Ownership, main = "Overall Mobile Phone Access",
+     xlab = "Mobile Phone Access Response")
+
+```
+Similar to the analysis of internet access, we see Europe, Latin America and OECD seem to have higher mobile ownership compared to regions like South Asia and Africa. A key thing to note is that these regions do not include high income individuals therefore, the analysis can deduce that mobile access in low to middle income communities can be key in terms of access and use of digital financial services like mobile money services. 
+
+```{r}
+#understanding bank ownership across regions
+table(GFI$Region, GFI$Bank.Account.Ownership)
+
+#bank ownership overall
+hist(GFI$Bank.Account.Ownership, main = "Overall Bank Account Ownership",
+     xlab = "Bank Ownership Response")
+```
+
+Once again, bank account ownership is more prevalent in regions like Europe, OECD etc but also prevalent in Sub-Saharan Africa more so as compared to East Asia and South Asia. Ownership of a bank account is an automatic sign that individuals in these regions are using financial services and could be receptive to adapting evolving financial services. 
+
+
+```{r}
+#understanding bank ownership across regions
+hist(GFI$Bank.Account.Ownership, main = "Histogram Bank Ownership",
+     xlab = "Bank Ownership Response")
+```
+```{r}
+#Spread of financial services across region and age
+GFI.plot <- ggplot(data=GFI, aes(x=Region, y=Bank.Account.Ownership))
+ggplot(data=GFI, aes(x=Region, y=Bank.Account.Ownership, color=Region))+geom_point(aes(size=age))+facet_grid()
+#theme(axis.text.x = element_text(angle=45)) - I wanted to use this to fix the axis but it hides the age legend
+```
+We see how financial service of having a bank account is concentrated in regions like Europe, Sub Saharn Africa,OECD etc with most of the individuals in the age range of their 40s. This helps us identify that a key target demographic for encouraging use of financial services and introducing new financial services are young-adults to middle-aged individuals, most likely part of the workforce.
+
+## Mobile Money Financial Services
+
+Now, we focus on one key financial service ie Mobile Money Market - within this segment of the analysis we focus on understanding the following dimensions:
+1) How well has the mobile money market integrated itself so far
+2) Correlation between internet access and usage of mobile money market financial services 
+
+```{r}
+summary(GFI$mobileowner)
+summary(GFI$Mobile.Payment.Use)
+
+GFIMobileData <- data.frame(GFI$Country,GFI$Region,GFI$age,GFI$Gender,GFI$mobileowner,GFI$Mobile.Payment.Use,GFI$Mobile.phone.payments.usage,GFI$Use.mobile.money.without.help,GFI$Savings.mobile.money.account.,GFI$Keep.money.in.mobile.money.accunt, GFI$internetaccess)
+```
+```{r}
+#The next few visualizations are used for understanding relationship between mobile phone access and mobile money market usage
+boxplot(GFIMobileData$GFI.Mobile.phone.payments.usage,GFIMobileData$GFI.mobileowne,col="blue")
+```
+
+```{r}
+
+# Activate likert and plyr
+
+library(likert)
+library(plyr)
+
+# Select only the first 8 items in the survey
+items <- select(GFIMobileData, starts_with(c("GFI.mobileowner")))
+
+# A custom function to recode numerical responses into ordered factors
+likert_recode <- function(x) {
+  y <- ifelse(is.na(x), NA,
+              ifelse(x == 1, "Yes",
+                     ifelse(x == 2, "No",
+                            ifelse(x == 3, "Dont Know", "No Response"))))
+  
+  y <- factor(y, levels = c("Yes", "No", "Dont Know", "No Response"))
+  
+  return(y)
+}
+
+# Transform the items into factors and save the data set as a likert object
+items_likert <- items %>%
+  mutate_all(likert_recode) %>%
+  likert()
+
+# Create a stacked bar chart
+plot(items_likert, 
+     # Group the items alphabetically
+     group.order=names(items),
+     # Plot the percentages for each response category
+     plot.percents = TRUE,
+     # Plot the total percentage for negative responses
+     plot.percent.low = FALSE,
+     # Plot the total percentage for positive responses
+     plot.percent.high = FALSE,
+     # Whether response categories should be centered
+     # This is only helpful when there is a middle response
+     # option such as "neutral" or "neither agree nor disagree"
+     centered = FALSE,
+     # Wrap label text for item labels
+     wrap=30)
+
+
+```
+
+```{r}
+
+# Activate likert and plyr
+
+library(likert)
+library(plyr)
+
+# Select only the first 8 items in the survey
+items <- select(GFIMobileData, starts_with(c("GFI.Mobile.phone.payments.usage")))
+
+# A custom function to recode numerical responses into ordered factors
+likert_recode <- function(x) {
+  y <- ifelse(is.na(x), NA,
+              ifelse(x == 1, "Yes",
+                     ifelse(x == 2, "No",
+                            ifelse(x == 3, "Dont Know", "No Response"))))
+  
+  y <- factor(y, levels = c("Yes", "No", "Dont Know", "No Response"))
+  
+  return(y)
+}
+
+# Transform the items into factors and save the data set as a likert object
+items_likert <- items %>%
+  mutate_all(likert_recode) %>%
+  likert()
+
+# Create a stacked bar chart
+plot(items_likert, 
+     # Group the items alphabetically
+     group.order=names(items),
+     # Plot the percentages for each response category
+     plot.percents = TRUE,
+     # Plot the total percentage for negative responses
+     plot.percent.low = FALSE,
+     # Plot the total percentage for positive responses
+     plot.percent.high = FALSE,
+     # Whether response categories should be centered
+     # This is only helpful when there is a middle response
+     # option such as "neutral" or "neither agree nor disagree"
+     centered = FALSE,
+     # Wrap label text for item labels
+     wrap=30)
+
+
+```
+This initial, basic visualization above show how the chunk of the responses represent how most people own a mobile phone and may also utilize mobile payments as one of their financial services options.However, the %age of people owning a mobile phone compared to those actually utilizing mobile payments is much higher. This will be further explored later on where we try to understand reasons for individuals to not opt for advanced methods of financial services.
+
+```{r}
+#Seeing how mobile money mode usage varies with age
+cbPalette <-c("orange","green")
+MP.plot <- ggplot(data=GFIMobileData
+                  , aes(x=GFI.age
+                        , y=GFI.Mobile.phone.payments.usage))
+ggplot(data=GFIMobileData
+       , aes(y=GFI.Mobile.phone.payments.usage, x=GFI.age))+geom_point(aes())+scale_colour_manual(values = cbPalette)
+
+```
+
+```{r}
+#Seeing how internet access influences use of mobile money market
+cbPalette <-c("orange","green")
+MP.plot <- ggplot(data=GFIMobileData
+                  , aes(x=GFI.internetaccess
+                        , y=GFI.Mobile.phone.payments.usage))
+ggplot(data=GFIMobileData
+       , aes(y=GFI.Mobile.phone.payments.usage, x=GFI.internetaccess))+geom_point(aes())+scale_colour_manual(values = cbPalette)
+
+hist(GFIMobileData$GFI.Mobile.phone.payments.usage)
+hist(GFIMobileData$GFI.internetaccess)
+```
+
+We notice how despite a greater share of respondents showing access to internet, there is not as much mobile money market utilization by individuals. Therefore, internet access or lack there of may not be the only factor impacting success or failure of mobile money markets.
+
+## Reasons that prevent financial inclusion/utilization of financial services
+
+We now divert our focus on factors that act as a hindrance for people to opt for financial services usage and later we shall utilize our analysis to understand how can we counter some of these obstacles to encourage financial inclusion.
+
+```{r}
+
+GFIObstacles<- data.frame(GFI$Country,GFI$Region,GFI$age,GFI$Gender,GFI$pop_adult,GFI$Bank.Account.Ownership,GFI$Debit.ATM.Card.Ownership,GFI$Independency.in.bank.account.usage,GFI$FI.is.far,GFI$FS.expensive,GFI$Dont.have.documentation,GFI$Don.t.trust.FI,GFI$Religious,GFI$Not.enough.money,GFI$Use.family.members.account,GFI$No.need.of.FS)
+                            
+```
+
+```{r}
+#Ranking different obstacles in accessing/using
+mosaicplot(GFI$FI.is.far~
+           GFI$FS.expensive
+           ,data=GFIObstacles
+           ,col=c("Blue","Red","Orange","Yellow"))
+
+
+
+mosaicplot(GFI$Dont.have.documentation~
+           GFI$Don.t.trust.FI
+           ,data=GFIObstacles
+           ,col=c("Blue","Red","Orange","Yellow"))
+```
+The mosaic plots represent the following key obstacles:
+1) The first mosaic plot shows how people perceive financial services to be expenses and how for some financial institutions are too far to access.
+2) The second mosaic plot shows how certain individuals don't trust these financial institutions or lack the relevant documentation required to become part of financial institutions or utilize financial services.
+
+
+One can assume that this would be a case in developing countries, specifically in rural areas where financial institutions may not be found as easily due to lower demand for such services.Furthermore, the lack of trust may come from lack of exposure to financial institutions but also could be rooted in how advancing financial services like mobile or internet banking is more prone to scams therefore, people are not as comfortable utilizing them just as yet.
+
+```{r}
+boxplot (GFI$Lack.of.money.in.old.age,GFI$Not.be.able.to.pay.for.medical,GFI$Not.able.to.pay.for.monthly.expenses,GFI$Not.pay.bills.fees,
+         horizontal = TRUE,
+         main = "Key Personal Struggles",
+         xlab = "Issues",
+         ylab = "",
+         col = c("red","pink","lightgoldenrod","yellow","lightblue","blue"))
+axis(2,at=1:4,labels=c("Lack of Money","Not Pay Medical","Not Pay Expenses","Not Pay Bills"), las=2)
+```
+This graph helps us identify how many individuals are engrossed in key financial struggles therefore, opting for financial services is an alien concept for them as they have other pressing issues to worry about. 
+
+## Linear analysis between some factors and digital financial services 
+
+```{r linear models}
+#linear model to analyze relationship between bank account and population
+GFIbs.lmfit <- lm(Bank.Account.Ownership ~ pop_adult, data=GFI)
+summary(GFIbs.lmfit)
+plot (log(GFI$pop_adult)~as.numeric(GFI$Bank.Account.Ownership),
+      ylab = "Population",
+      xlab = "Bank Account",
+      main = "Bank Account and Population")
+abline(GFIbs.lmfit, col="red")
+
+#linear model to analyze relationship between debit card and population
+GFcbs.lmfit <- lm(Debit.ATM.Card.Ownership ~ pop_adult, data=GFI)
+summary(GFcbs.lmfit)
+plot (log(GFI$pop_adult)~as.numeric(GFI$Debit.ATM.Card.Ownership),
+      ylab = "Population",
+      xlab = "Debit Card",
+      main = "Debit Card and Population")
+abline(GFIbs.lmfit, col="red")
+
+```
+
+
+## Conclusion
+Talk about what kind of financial services are available and what kind should be introduced
+How can they tackle the key issues people are concerned about 
+
+Following are the key takeaways:
+Encourage Mobile Money Market Financial Services:
+- It is evident that majority of the communities own a mobile phone and therefore, introduction of mobile money market financial services can be a key advancement in terms of financial services that may be utilized within these communities
+- In communities where this is already been introduced more focused awareness campaigns must be done to encourage adoption of this model 
+
+Address key concerns to encourage financial inclusion
+- Issues like trust in financial services can be easily addressed through better awareness campaigns - educating individuals on how financial service benefits outweigh the costs and risk associated with them is key in this progress
+- Identify areas with limited or no financial services - this will encourage financial inclusion, especially in low to mid-income regions
+- Educate individuals how opting for financial services encourages savings and investment and therefore, would aid in resolving their financial struggles overtime
+
+Encouraging financing inclusion - this is a key step as this directly correlates with economic progress and development. Small and medium enterprises or microfinancing financial services are key building blocks within low-income communities. By encouraging financial inclusion, we open up newer emplpoyment avenues for these communities. 
+
+
+
+## References
+
+1) Refered to Lecture Slides for different codes
+2) https://towardsdatascience.com/5-ways-to-effectively-visualize-survey-data-using-r-89928bf08cb2 
+3) https://stackoverflow.com/questions/13297995/changing-font-size-and-direction-of-axes-text-in-ggplot2 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
